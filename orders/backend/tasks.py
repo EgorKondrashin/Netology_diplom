@@ -1,16 +1,11 @@
+from celery import shared_task
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.dispatch import receiver, Signal
-from django_rest_passwordreset.signals import reset_password_token_created
+from django.core.mail import EmailMultiAlternatives, send_mail
 
 from .models import ConfirmEmailToken, User
 
-new_user_registered = Signal()
 
-new_order = Signal()
-
-
-@receiver(reset_password_token_created)
+@shared_task
 def password_reset_token_created(sender, instance, reset_password_token, **kwargs):
     """
     Отправляем письмо с токеном для сброса пароля
@@ -36,8 +31,8 @@ def password_reset_token_created(sender, instance, reset_password_token, **kwarg
     msg.send()
 
 
-@receiver(new_user_registered)
-def new_user_registered_signal(user_id, **kwargs):
+@shared_task
+def new_user_registered(user_id, **kwargs):
     """
     Отправляем письмо с подтверждением почты
     """
@@ -57,8 +52,8 @@ def new_user_registered_signal(user_id, **kwargs):
     msg.send()
 
 
-@receiver(new_order)
-def new_order_signal(user_id, **kwargs):
+@shared_task
+def new_order(user_id, **kwargs):
     """
     Отправляем письмо при изменении статуса заказа
     """

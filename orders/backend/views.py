@@ -8,8 +8,8 @@ from django.db.models import Q, Sum, F
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 from requests import get
+from .tasks import new_user_registered, new_order
 
-from .signals import new_user_registered, new_order
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,6 +29,7 @@ class RegisterAccount(APIView):
     """
     Для регистрации покупателей
     """
+    throttle_scope = 'anon'
     # Регистрация методом POST
     def post(self, request, *args, **kwargs):
 
@@ -55,13 +56,14 @@ class RegisterAccount(APIView):
                     user = user_serializer.save()
                     user.set_password(request.data['password'])
                     user.save()
-                    new_user_registered.send(sender=self.__class__, user_id=user.id)
+                    new_user_registered.delay(user_id=user.id)
                     return JsonResponse({'Status': True})
                 else:
                     return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
 
 
 class UserViewSet(ModelViewSet):
+    throttle_scope = 'anon'
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
@@ -70,6 +72,7 @@ class ConfirmAccount(APIView):
     """
     Класс для подтверждения почтового адреса
     """
+    throttle_scope = 'anon'
 
     # регистрация методом POST
     def post(self, request, *args, **kwargs):
@@ -93,6 +96,7 @@ class ContactView(APIView):
     """
     Класс для работы с контактами покупателей
     """
+    throttle_scope = 'user'
 
     # получить мои контакты
     def get(self, request, *args, **kwargs):
@@ -161,6 +165,7 @@ class LoginAccount(APIView):
     """
     Класс для авторизации пользователей
     """
+    throttle_scope = 'anon'
     # Авторизация методом POST
     def post(self, request, *args, **kwargs):
 
@@ -181,6 +186,7 @@ class AccountDetails(APIView):
     """
     Класс для работы данными пользователя
     """
+    throttle_scope = 'user'
 
     # получить данные
     def get(self, request, *args, **kwargs):
@@ -238,6 +244,7 @@ class ProductInfoView(ReadOnlyModelViewSet):
     """
     Класс для поиска товаров
     """
+    throttle_scope = 'anon'
     serializer_class = ProductInfoSerializer
 
     def get_queryset(self):
@@ -262,6 +269,7 @@ class BasketView(APIView):
     """
     Класс для работы с корзиной пользователя
     """
+    throttle_scope = 'user'
     # получить корзины
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -352,6 +360,7 @@ class OrderView(APIView):
     """
     Класс для получения и размещения заказов пользователями
     """
+    throttle_scope = 'user'
 
     # получить мои корзины
     def get(self, request, *args, **kwargs):
@@ -381,7 +390,7 @@ class OrderView(APIView):
                     return JsonResponse({'Status': False, 'Errors': 'Неправильно указаны аргументы'})
                 else:
                     if is_updated:
-                        new_order.send(sender=self.__class__, user_id=request.user.id)
+                        new_order.delay(user_id=request.user.id)
                         return JsonResponse({'Status': True})
 
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
@@ -391,6 +400,7 @@ class PartnerOrders(APIView):
     """
     Класс для получения заказов поставщиками
     """
+    throttle_scope = 'user'
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Errors': 'Log in required'}, status=403)
@@ -412,6 +422,7 @@ class PartnerState(APIView):
     """
     Класс для работы со статусом поставщика
     """
+    throttle_scope = 'user'
 
     # получить текущий статус
     def get(self, request, *args, **kwargs):
@@ -448,6 +459,7 @@ class PartnerUpdate(APIView):
     """
     Класс для обновления прайса от поставщика
     """
+    throttle_scope = 'partner'
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Errors': 'Log in required'}, status=403)
